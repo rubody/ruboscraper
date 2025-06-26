@@ -6,42 +6,30 @@ app = Flask(__name__)
 
 @app.route('/scrape', methods=['POST'])
 def scrape():
-    data = request.get_json()
+    data = request.json
     url = data.get('url')
-    if not url:
-        return jsonify({'error': 'No URL provided'}), 400
-
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
     try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X)"
-        }
-        r = requests.get(url, headers=headers, timeout=10)
-        soup = BeautifulSoup(r.text, 'html.parser')
+        resp = requests.get(url, headers=headers, timeout=10)
+        if resp.status_code != 200:
+            return jsonify({'title': '', 'price': '', 'image': '', 'debug_status': f'HTTP {resp.status_code}'})
+        soup = BeautifulSoup(resp.text, 'html.parser')
 
-        # Try to find product title, price, and image
+        # Amazon
         title = soup.select_one('#productTitle')
-        title = title.text.strip() if title else ''
-
-        price = soup.select_one('#corePrice_feature_div .a-offscreen')
-        if not price:
-            price = soup.select_one('.a-price .a-offscreen')
-        price = price.text.strip() if price else ''
-
-        image = soup.select_one('#landingImage')
-        if not image:
-            img_tag = soup.select_one('#imgTagWrapperId img')
-            image = img_tag['src'] if img_tag and img_tag.has_attr('src') else ''
-        else:
-            image = image['src']
+        price = soup.select_one('.a-price .a-offscreen')
+        image = soup.select_one('#landingImage') or soup.select_one('#imgTagWrapperId img')
 
         return jsonify({
-            'title': title,
-            'price': price,
-            'image': image
+            'title': title.text.strip() if title else '',
+            'price': price.text.strip() if price else '',
+            'image': image['src'] if image and image.has_attr('src') else ''
         })
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'title': '', 'price': '', 'image': '', 'debug_status': str(e)})
 
-@app.route('/')
-def index():
-    return "API is working!"
+@app.route('/', methods=['GET'])
+def home():
+    return "RuboShipping Scraper Running!"
